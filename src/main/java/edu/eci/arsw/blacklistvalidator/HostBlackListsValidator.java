@@ -5,6 +5,7 @@
  */
 package edu.eci.arsw.blacklistvalidator;
 
+import com.sun.deploy.util.BlackList;
 import edu.eci.arsw.spamkeywordsdatasource.HostBlacklistsDataSourceFacade;
 import java.util.LinkedList;
 import java.util.List;
@@ -29,12 +30,13 @@ public class HostBlackListsValidator {
      * @param ipaddress suspicious host's IP address.
      * @return  Blacklists numbers where the given host's IP address was found.
      */
-    public List<Integer> checkHost(String ipaddress, int numThreads){
+    public List<Integer> checkHost(String ipaddress, int numThreads) throws InterruptedException {
         
         LinkedList<Integer> blackListOcurrences=new LinkedList<>();
 
 
         int ocurrencesCount=0;
+
         
         HostBlacklistsDataSourceFacade skds=HostBlacklistsDataSourceFacade.getInstance();
         
@@ -42,27 +44,43 @@ public class HostBlackListsValidator {
 
 
         
-        for (int i=0;i<skds.getRegisteredServersCount() && ocurrencesCount<BLACK_LIST_ALARM_COUNT;i++){
+        for (int i=0;i<skds.getRegisteredServersCount() && ocurrencesCount<BLACK_LIST_ALARM_COUNT;i++) {
             checkedListsCount++;
-            
-            if (skds.isInBlackListServer(i, ipaddress)){
-                
-                blackListOcurrences.add(i);
-                
-                ocurrencesCount++;
+
+            if (checkedListsCount % numThreads == 2) {
+                Thread thread = new BlackListThread<>(i, ipaddress, 0, 0, false);
+                thread.run();
+                if (skds.isInBlackListServer(i, ipaddress)) {
+
+                    blackListOcurrences.add(i);
+
+                    ocurrencesCount++;
+
+                } else {
+                    thread = new BlackListThread<>(i, ipaddress, 1, 0, false);
+
+                    blackListOcurrences.add(i);
+
+                    ocurrencesCount++;
+                }
             }
-        }
-        
-        if (ocurrencesCount>=BLACK_LIST_ALARM_COUNT){
-            skds.reportAsNotTrustworthy(ipaddress);
-        }
-        else{
-            skds.reportAsTrustworthy(ipaddress);
-        }                
-        
-        LOG.log(Level.INFO, "Checked Black Lists:{0} of {1}", new Object[]{checkedListsCount, skds.getRegisteredServersCount()});
-        
-        return blackListOcurrences;
+
+            for (Thread thread : thread) {
+                    thread.join();
+                }
+            }
+
+            if (ocurrencesCount>=BLACK_LIST_ALARM_COUNT){
+                skds.reportAsNotTrustworthy(ipaddress);
+                BlackListThread.isFive = true;
+            }
+            else{
+                skds.reportAsTrustworthy(ipaddress);
+            }
+
+            LOG.log(Level.INFO, "Checked Black Lists:{0} of {1}", new Object[]{checkedListsCount, skds.getRegisteredServersCount()});
+
+            return blackListOcurrences;
     }
     
     

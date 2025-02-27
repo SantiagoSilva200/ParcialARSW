@@ -8,7 +8,7 @@ public class BlackListThread<facade> extends Thread{
     private final facade Blacklist;
     private final String host;
     private final int start;
-    private final boolean isFive;
+    private static boolean isFive;
     private int ocurrences;
 
     public BlackListThread(facade Blacklist, String host, int start, int ocurrences, boolean isFive) throws IllegalArgumentException {
